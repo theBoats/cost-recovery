@@ -4,10 +4,17 @@ import pandas as pd
 import pathlib
 from pathlib import Path
 import sys
+import tabulate
+from contextlib import redirect_stdout
+from pyfiglet import Figlet
+
+
+
 
 COST_PER_STARTUP = 1.28
 COST_PER_COUNT = 0.64
 COST_PER_SHUTDOWN = 9.4
+
 
 
 # FUNCTIONS
@@ -101,6 +108,14 @@ def parse_counts(path, users, days):
 
 	return(x)
 
+def print_nice(df):
+	"""
+	Uses tabulate package to nicely format a dataframe
+	"""
+
+	out = df.to_markdown(index=True, tablefmt='pipe', colalign=['center']*len(df.columns))
+	print(out)
+
 # MAIN
 
 def main():
@@ -122,6 +137,9 @@ def main():
 	                                                           |___/                       
 	                                                           """
 	                                                           )
+
+	# set text rendering font
+	f = Figlet(font='slant')
 
 	# DATA FOR TESTING
 	p = "/mnt/backedup/home/grahamM/temp/AB18/031121/010372/RESULTS/2023-08"
@@ -174,21 +192,31 @@ def main():
 	print(f"This month the counter was used on the following days: {days}\n")
 	print(f"This month the counter was used by: {ALL_USERS} labs.")
 
-	print("\nNumber of counts performed by each lab split by day.")
-	print(x)
+
+	print(f.renderText('counts'))
+	print("Number of counts performed by each lab split by day.\n")
+	print_nice(x)
 
 	print(f"\nCost of counts per lab at {COST_PER_COUNT} each:")
 	for lab in ALL_USERS:
-		print(lab, (x.loc['Total', lab] * COST_PER_COUNT))
+		print(lab, str("$"+str(x.loc['Total', lab] * COST_PER_COUNT)))
 
 	# DAYS USED BY EACH LAB
-	print("\n\nSummary of days the counter was used by each lab.")
+	print(f.renderText('use'))
+	print("Summary of days the counter was used by each lab.")
 	print("1.0 indicates samples were run that day. 0.0 indicates no use.\n")
-	print(days_counter_was_used)
+	print_nice(days_counter_was_used)
+
+	# STARTUP SHUTDOWN
+	print("\n\n")
+	print(f.renderText('startup /'))
+	print(f.renderText('shutdown'))
+	print("Breakdown of startup / shutdown costs per lab.\n")
+	print_nice(startup_and_shutdown_costs)
 
 
-	print("\n\nBreakdown of startup / shutdown costs per lab")
-	print(startup_and_shutdown_costs)
+
+	
 
 
 
@@ -204,17 +232,24 @@ def main():
 	print("The QC consists of 3 standards (Low, Normal, High) which are each run once a week.")
 	print("The cost of QC and bleach cleans are split evenly amongst all labs using the instrument.")
 
-	print("\n\nFINAL COSTING")
+	print("\n\n")
+	print(f.renderText('final costs'))
 	for lab, money in total_cost.items():
-		print(lab, round(money,2))
-
-
+		print(lab, str("$"+str(round(money,2))))
 
 
 
 
 if __name__ == "__main__":
-	main()
+	with open('output.txt', 'w') as f:
+		with redirect_stdout(f):
+			main()
+
+
+
+	
+	
+
 
 
 
