@@ -7,7 +7,7 @@ import sys
 import tabulate
 from contextlib import redirect_stdout
 from pyfiglet import Figlet
-
+import typing
 
 
 
@@ -15,10 +15,11 @@ COST_PER_STARTUP = 1.28
 COST_PER_COUNT = 0.64
 COST_PER_SHUTDOWN = 9.4
 
-
+# TYPE ALIAS FOR DATAFRAME
+DataFrame = pd.DataFrame
 
 # FUNCTIONS
-def get_lab(file):
+def get_lab(file: Path) -> str:
 
     with open(file) as csv_file:
         csv_reader = csv.reader(csv_file)
@@ -26,13 +27,15 @@ def get_lab(file):
     # return(rows[9][0].split(';')[-1]) # USE ID FIELD
     return(rows[12][0].split(';')[-1]) # USE OPERATOR FIELD
 
-def days_counter_used_by_each_lab(df):
+def days_counter_used_by_each_lab(df: DataFrame) -> DataFrame:
 	"""
 	Returns a dataframe with:
 	Rows = days
 	Cols = lab IDs
 	Values = 1.0 if used that day, 0.0 if not used
 	"""
+
+	df = df.copy()
 
 	# drop totals row off
 	df = df.iloc[:-1,:]
@@ -46,7 +49,7 @@ def days_counter_used_by_each_lab(df):
 
 	return(df)
 
-def costs_for_startup_and_shutdown(df):
+def costs_for_startup_and_shutdown(df: DataFrame) -> DataFrame:
 	"""
 	Returns a dataframe with:
 	Rows = days
@@ -54,16 +57,17 @@ def costs_for_startup_and_shutdown(df):
 	Values = Startup/shutdown cost calculated from the current cost split by the
 	number of labs that used the counter that day.
 	"""
+	
+	# copy df to avoid setting on slice error
+	df = df.copy()
+
 	# drop totals and counts per day rows / columns
 	df = df.iloc[:-1,:]
 
-	# !! this has issues with index 'chaining' i.e. the [row][j]
-	# should be rewritten to use both values in loc i.e. should be [row, col] as tuple
-
 	for i, row in enumerate(df.index):
-		for j, val in enumerate(df.loc[row]):
-			if val > 0:
-				df.loc[row][j] = (1 / df.iloc[i,:].astype(bool).sum()) * (COST_PER_STARTUP + COST_PER_SHUTDOWN)
+		for col in df:
+			if df.loc[row, col] > 0:
+				df.loc[row, col] = (1 / df.iloc[i,:].astype(bool).sum()) * (COST_PER_STARTUP + COST_PER_SHUTDOWN)
 
 	# add price totals for startup / shutdown
 	for col in df:
@@ -71,7 +75,7 @@ def costs_for_startup_and_shutdown(df):
 
 	return(df)
 
-def find_users(path):
+def find_users(path: Path) -> set:
 	"""
 	Returns the set of labs that used the counter within the month
 	"""
@@ -80,7 +84,16 @@ def find_users(path):
 	ALL_USERS = set(USE)
 	return(ALL_USERS)
 
-def parse_counts(path, users, days):
+def parse_counts(path: Path, users: set[str], days: list[str]) -> DataFrame:
+	"""
+	Takes a path argument for the base directory of a month's log output from the
+	Abbott Celldyn Emerald.
+	A set of users from the path
+	A list of days the counter was used
+
+	Returns a dataframe with days as rows and labs as columns
+	Data is the number of counts performed that day
+	"""
 
 	dic_list = []
 	for day in days:
@@ -96,19 +109,19 @@ def parse_counts(path, users, days):
 		dic_list.append(temp_dict)
 
 
-	x = pd.DataFrame(dic_list)
+	df = pd.DataFrame(dic_list)
 
 	# Set the index to days and name the index
-	x = x.set_axis(days)
-	x.index.name = "Day"
+	df = df.set_axis(days)
+	df.index.name = "Day"
 
 	# add total column
-	for col in x:
-		x.loc['Total', col] = x[col].sum()
+	for col in df:
+		df.loc['Total', col] = df[col].sum()
 
-	return(x)
+	return(df)
 
-def print_nice(df):
+def print_nice(df: DataFrame) -> None:
 	"""
 	Uses tabulate package to nicely format a dataframe
 	"""
@@ -163,17 +176,13 @@ def main():
 
 
 	# read in count data to dataframe from filepath (folder output from celldyn)
-	x = parse_counts(home, ALL_USERS, days)
-
-	# deep copy df for manipulation by other functions
-	df = x.copy()
-	df2 = x.copy()
+	df = parse_counts(home, ALL_USERS, days)
 
 	# calculate how many days each lab used the counter on
 	days_counter_was_used = days_counter_used_by_each_lab(df)
 
 	# calculate startup and shutdown costs
-	startup_and_shutdown_costs = costs_for_startup_and_shutdown(df2)
+	startup_and_shutdown_costs = costs_for_startup_and_shutdown(df)
 
 	# calculate qc and bleach cleans
 	cost_of_qc = (12*COST_PER_COUNT)/len(ALL_USERS)
@@ -183,7 +192,7 @@ def main():
 
 	total_cost = {}
 	for lab in ALL_USERS:
-		total_cost[lab] = (x.loc['Total', lab] * COST_PER_COUNT) + startup_and_shutdown_costs.loc['Total', lab]  + cost_of_qc + cost_of_bleach_cleans
+		total_cost[lab] = (df.loc['Total', lab] * COST_PER_COUNT) + startup_and_shutdown_costs.loc['Total', lab]  + cost_of_qc + cost_of_bleach_cleans
 
 		
 
@@ -195,11 +204,11 @@ def main():
 
 	print(f.renderText('counts'))
 	print("Number of counts performed by each lab split by day.\n")
-	print_nice(x)
+	print_nice(df)
 
 	print(f"\nCost of counts per lab at {COST_PER_COUNT} each:")
 	for lab in ALL_USERS:
-		print(lab, str("$"+str(x.loc['Total', lab] * COST_PER_COUNT)))
+		print(lab, str("$"+str(df.loc['Total', lab] * COST_PER_COUNT)))
 
 	# DAYS USED BY EACH LAB
 	print(f.renderText('use'))
@@ -236,6 +245,8 @@ def main():
 	print(f.renderText('final costs'))
 	for lab, money in total_cost.items():
 		print(lab, str("$"+str(round(money,2))))
+
+
 
 
 
