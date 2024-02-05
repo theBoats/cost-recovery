@@ -129,6 +129,27 @@ def print_nice(df: DataFrame) -> None:
 	out = df.to_markdown(index=True, tablefmt='pipe', colalign=['center']*len(df.columns))
 	print(out)
 
+def accept_default_values():
+ 	accept = input(f"Accept default values:\n Cost per count: ${COST_PER_COUNT}\n Cost per startup: ${COST_PER_STARTUP}\n Cost per shutdown: ${COST_PER_SHUTDOWN}\n(Y/N) ?\n")
+
+ 	if accept.lower() == 'y':
+ 		return
+ 	else:
+ 		change_default_values()
+
+def change_default_values():
+
+	global COST_PER_COUNT
+	global COST_PER_STARTUP
+	global COST_PER_SHUTDOWN
+
+	COST_PER_COUNT = float(input("Enter the new value for the cost of ONE COUNT:"))
+	COST_PER_STARTUP = float(input("Enter the new value for the cost of ONE STARTUP:"))
+	COST_PER_SHUTDOWN = float(input("Enter the new value for the cost of ONE SHUTDOWN:"))
+	return(COST_PER_COUNT, COST_PER_STARTUP, COST_PER_SHUTDOWN)
+	
+
+
 # MAIN
 
 def main():
@@ -150,6 +171,8 @@ def main():
 	                                                           |___/                       
 	                                                           """
 	                                                           )
+
+
 
 	# set text rendering font
 	f = Figlet(font='slant')
@@ -252,6 +275,13 @@ def main():
 
 
 if __name__ == "__main__":
+
+	# Run this before redirecting stdout
+
+	# Accept default values:
+	accept_default_values()
+
+
 	with open('output.txt', 'w') as f:
 		with redirect_stdout(f):
 			main()
